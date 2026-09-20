@@ -4,6 +4,12 @@ import CleanDockCore
 
 enum Status { case needsPermission, disabled, noDock, verticalDock, retinaDisplay, active }
 
+/// Identifies a tile by what it is, not by its position in the list — the list reorders live during a drag.
+private struct TileIdentity: Equatable {
+    let kind: TileKind
+    let url: URL?
+}
+
 /// Wires reader, icons, cache and overlay together. Use from the main queue.
 final class AppController {
     private let reader = DockReader()
@@ -12,8 +18,8 @@ final class AppController {
     private let overlay = OverlayWindow()
     private var last: DockSnapshot?
     private lazy var tracker = MotionTracker(reader: reader) { [weak self] in self?.apply($0) }
-    private var pressed: (index: Int, at: CGPoint)?
-    private var draggedIndex: Int?
+    private var pressed: (identity: TileIdentity, at: CGPoint)?
+    private var draggedTile: TileIdentity?
     private var monitors: [Any] = []
 
     private(set) var status = Status.noDock
@@ -40,14 +46,16 @@ final class AppController {
         }
         DistributedNotificationCenter.default().addObserver(forName: Notification.Name("AppleInterfaceThemeChangedNotification"), object: nil, queue: .main) { [weak self] _ in
             self?.cache.removeAll()
-            self?.tracker.kick()
+            self?.refresh()
         }
         installMouseMonitors()
         tracker.start()
     }
 
-    /// Redraws from a fresh Dock read. A burst always applies its first read.
+    /// Repaints immediately from the last snapshot (so a state-only change like `draggedTile` or the cache
+    /// is never swallowed by a running burst), then kicks the tracker for a fresh read.
     func refresh() {
+        apply(last)
         tracker.kick()
     }
 
@@ -66,15 +74,16 @@ final class AppController {
             if let monitor { monitors.append(monitor) }
         }
         add(.leftMouseDown) { c in
+            c.pressed = nil                          // a missed mouse-up must not leave this armed
             let p = c.pointer()
-            guard let index = c.last?.tiles.firstIndex(where: { $0.frame.contains(p) }) else { return }
-            c.pressed = (index, p)
+            guard let tile = c.last?.tiles.first(where: { $0.frame.contains(p) }) else { return }
+            c.pressed = (TileIdentity(kind: tile.kind, url: tile.url), p)
             c.tracker.kick()
         }
         add(.leftMouseDragged) { c in
             let p = c.pointer()
-            if let pressed = c.pressed, c.draggedIndex == nil, hypot(p.x - pressed.at.x, p.y - pressed.at.y) > 3 {
-                c.draggedIndex = pressed.index       // show the real drag image of this tile
+            if let pressed = c.pressed, c.draggedTile == nil, hypot(p.x - pressed.at.x, p.y - pressed.at.y) > 3 {
+                c.draggedTile = pressed.identity     // show the real drag image of this tile
                 c.apply(c.last)
             }
             // anything dragged near the Dock makes its tiles move apart
@@ -83,8 +92,8 @@ final class AppController {
         add(.leftMouseUp) { c in
             guard c.pressed != nil else { return }
             c.pressed = nil
-            c.draggedIndex = nil
-            c.tracker.kick()
+            c.draggedTile = nil
+            c.refresh()
         }
     }
 
@@ -106,8 +115,8 @@ final class AppController {
         let dark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
 
         var items: [(rect: CGRect, image: CGImage)] = []
-        for (index, (tile, iconRect)) in zip(snapshot.tiles, iconRects).enumerated() {
-            guard index != draggedIndex,                      // the real drag image must be visible
+        for (tile, iconRect) in zip(snapshot.tiles, iconRects) {
+            guard TileIdentity(kind: tile.kind, url: tile.url) != draggedTile,   // the real drag image must be visible
                   iconRect.width <= resting + 0.5,            // magnified tiles stay uncovered
                   let source = icons.key(for: tile) else { continue }
             let key = RenderKey(path: source.path, modified: source.modified, side: side, dark: dark, badgeLength: tile.badge.count)

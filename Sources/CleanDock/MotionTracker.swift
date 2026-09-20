@@ -12,6 +12,10 @@ final class MotionTracker {
     private var kickedAt: TimeInterval = 0
     private var timer: DispatchSourceTimer?
 
+    // Coalescing for the main-queue hop: at most one hop in flight, always delivering the newest snapshot.
+    private var hopScheduled = false
+    private var pendingSnapshot: DockSnapshot?
+
     // Only touched on `queue`.
     private var lastOutline: DockOutline?
     private var lastSnapshot: DockSnapshot?
@@ -49,7 +53,7 @@ final class MotionTracker {
             let result = detector.observe(snapshot, at: now)
             if result.changed {
                 lastSnapshot = snapshot
-                DispatchQueue.main.async { [apply] in apply(snapshot) }
+                scheduleApply(snapshot)
             }
             lock.lock()
             let done = result.settled && now - kickedAt > 0.3
@@ -59,6 +63,25 @@ final class MotionTracker {
             usleep(4000)
         }
         lastOutline = reader.outline()
+    }
+
+    /// Keeps only the newest snapshot and schedules at most one pending hop to the main queue,
+    /// so a slow `apply` cannot let the main queue grow unbounded during a fast burst.
+    private func scheduleApply(_ snapshot: DockSnapshot?) {
+        lock.lock()
+        pendingSnapshot = snapshot
+        let alreadyScheduled = hopScheduled
+        hopScheduled = true
+        lock.unlock()
+        guard !alreadyScheduled else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.lock.lock()
+            let next = self.pendingSnapshot
+            self.hopScheduled = false
+            self.lock.unlock()
+            self.apply(next)
+        }
     }
 
     private func idleTick() {
