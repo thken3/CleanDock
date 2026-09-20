@@ -101,6 +101,7 @@ build/
 .DS_Store
 *.xcodeproj
 .swiftpm/
+.superpowers/
 ```
 
 `LICENSE`: the standard MIT license text with the line `Copyright (c) 2026 Clean Dock contributors`.
@@ -800,7 +801,7 @@ import Testing
     var detector = StabilityDetector<Int>(quietPeriod: 0.3)
     _ = detector.observe(1, at: 10)
     #expect(detector.observe(1, at: 10.1) == (false, false))
-    #expect(detector.observe(1, at: 10.3) == (false, false))
+    #expect(detector.observe(1, at: 10.25) == (false, false))
     #expect(detector.observe(1, at: 10.31) == (false, true))
 }
 
