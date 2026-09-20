@@ -8,6 +8,7 @@ final class IconSource {
     var onChange: (() -> Void)?
 
     private var modifiedMemo: [String: (date: Date?, checked: TimeInterval)] = [:]
+    private var displayMemo: [String: (setting: StackArrangement?, checked: TimeInterval)] = [:]
     private var thumbnails: [URL: NSImage] = [:]
     private var requested: Set<URL> = []
     private var trashFull: Bool?                     // nil: unknown, or Finder automation denied
@@ -16,9 +17,14 @@ final class IconSource {
     /// Cheap: may be called for every tile on every frame. `nil` leaves the tile uncovered.
     func key(for tile: DockTile) -> (path: String, modified: Date?)? {
         switch tile.kind {
-        case .app, .file, .folder:
+        case .app, .file:
             guard let path = tile.url?.path else { return nil }
             return (path, modified(path))
+        case .folder:
+            guard let url = tile.url else { return nil }
+            let setting = displaySetting(of: url)
+            let suffix = setting.map { "|stack-\($0.rawValue)" } ?? "|folder"   // Stack ↔ Folder and arrangement changes must miss the cache
+            return (url.path + suffix, modified(url.path))
         case .trash:
             guard let trashFull else { return nil }
             return (trashFull ? "trash:full" : "trash:empty", nil)
@@ -31,7 +37,7 @@ final class IconSource {
             return NSImage(named: trashFull == true ? NSImage.trashFullName : NSImage.trashEmptyName).map { [$0] } ?? []
         }
         guard let url = tile.url else { return [] }
-        if tile.kind == .folder, let arrangement = stackArrangement(of: url) {
+        if tile.kind == .folder, let arrangement = displaySetting(of: url) {
             guard let items = stackItems(in: url) else { return [] }        // not readable: leave the tile to the Dock
             let front = StackOrder.front(items, arrangement: arrangement)
             if !front.isEmpty { return front.map { image(forStackItem: $0.url) } }
@@ -40,6 +46,17 @@ final class IconSource {
     }
 
     // MARK: Stacks
+
+    /// The Dock's stack/folder display setting for a folder, looked up at most every two seconds per path
+    /// so `key(for:)` and `images(for:)` always agree and the render cache notices a changed setting.
+    private func displaySetting(of folder: URL) -> StackArrangement? {
+        let path = folder.path
+        let now = ProcessInfo.processInfo.systemUptime
+        if let memo = displayMemo[path], now - memo.checked < 2 { return memo.setting }
+        let setting = stackArrangement(of: folder)
+        displayMemo[path] = (setting, now)
+        return setting
+    }
 
     /// The arrangement when the Dock shows this folder as a stack, `nil` when it shows it as a folder.
     private func stackArrangement(of folder: URL) -> StackArrangement? {
