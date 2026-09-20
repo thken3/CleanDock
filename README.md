@@ -1,20 +1,39 @@
 # Clean Dock
 
-Sharp Dock icons on non-Retina displays. Free and open source.
+<p align="center">
+  <img src=".github/preview.gif" width="251" alt="Dock icons at actual size. A divider slides across: left of it the standard Dock, right of it Clean Dock.">
+</p>
 
-![The same Dock icons drawn by the standard Dock and by Clean Dock, with a divider sliding between them](.github/preview.gif)
+I use a 34" ultrawide that isn't Retina, and I keep my Dock small. At that size the Dock icons
+look terrible. Ragged edges, smeared details, the Spotify logo is three broken lines. I assumed a
+macOS update would fix it at some point. It didn't, so I made this.
 
-On a 1x display the macOS Dock draws small icons by point-sampling a 128 px image: for a
-17 px icon it reads about 4 of every 56 pixels. The result is ragged and smeared, and no
-setting fixes it. Clean Dock draws a properly downscaled, pixel-aligned copy of every icon exactly on
-top of the blurry one. The Dock itself is untouched: every click, drag, menu and
-animation is still the real Dock.
+The animation above is actual size, so it is small. Left of the divider is what the Dock draws,
+right of it is what Clean Dock draws. If you are on a Retina screen you will see less of a
+difference than I do, which is sort of the point: on Retina the Dock is fine and you don't need this.
+
+## Why the Dock looks bad
+
+I measured it. For a small icon the Dock takes the 128 px version of the app icon and shrinks it
+with plain bilinear sampling. At 17 px that means it looks at roughly 4 pixels out of every 56 and
+throws the rest away. Thin lines survive or vanish depending on where they happen to fall. Clearing
+icon caches doesn't help and there is no setting for it.
+
+Clean Dock doesn't touch the Dock. It reads where each icon sits, shrinks the full-size icon
+properly, and draws that copy on top of the blurry one in a window that ignores clicks. Everything
+you click, drag or right-click is still the real Dock. When the Dock animates, the sharp icons
+move along with it.
 
 ## Install
 
-Download `CleanDock.zip` from the releases page, unzip it and move `CleanDock.app` to
-Applications. The app is not notarized, so macOS blocks the first launch: open it once, then go to
-System Settings → Privacy & Security and choose Open Anyway (on macOS 14, right-click the app and choose Open). Or build it yourself:
+Grab `CleanDock.zip` from the [releases page](https://github.com/thken3/CleanDock/releases), unzip
+it, and drag the app to Applications.
+
+I haven't paid Apple for notarization, so macOS will refuse to open it the first time. Open it
+once, let it complain, then go to System Settings → Privacy & Security and click Open Anyway. On
+macOS 14 you can right-click the app and choose Open instead.
+
+If you'd rather build it yourself:
 
 ```
 git clone https://github.com/thken3/CleanDock.git
@@ -23,48 +42,41 @@ make app
 open build/CleanDock.app
 ```
 
-## Permissions
+## What it asks for
 
-- **Accessibility (required).** Clean Dock reads where the Dock's tiles are. It does not
-  read or control anything else.
-- **Automation → Finder (optional).** Used to ask whether the Trash is empty. Without it
-  the Trash keeps the standard icon.
-- **Folder access (optional).** Asked for folders you keep in the Dock as a stack, such as
-  Downloads. Without it that stack keeps the standard icon.
+Accessibility is the one permission it can't work without. That is how it finds out where the Dock
+icons are. It doesn't read your screen or your keystrokes, it has no network code at all, and you
+can check that in the source.
 
-Clean Dock never captures the screen and never connects to the network.
+Two more prompts may show up, and you can say no to both. One is for controlling Finder, which is
+only used to ask whether the Trash is empty so the right Trash icon gets drawn. The other is for
+folders you keep in the Dock as a stack, like Downloads, because drawing the stack means knowing
+what's in it. If you decline, those icons just stay the way the Dock draws them.
 
-## How it behaves
+## Things it doesn't do
 
-- Active only while the Dock is at the bottom of a non-Retina display. Elsewhere it idles.
-- Follows the Dock's animations live: launching, quitting, bouncing, reordering.
-- The menu bar icon has an on/off switch, Settings and Quit. Settings shows a live before/after preview of your own
-  Dock icons, the state of each permission, Launch at login, and a switch to hide the menu bar icon.
-- On first launch a short window explains the Accessibility permission before macOS asks for it.
+It only switches on when the Dock is at the bottom of a non-Retina display. Dock on the left or
+right isn't supported yet. On a Retina display it sits idle.
 
-## Known limits
+Minimized windows keep their normal look, since those are live thumbnails. So do icons while the
+Dock's magnification is blowing them up, and an icon while you're dragging it. Badges and the
+little running dots are left alone too.
 
-- Minimized windows, magnified icons and an icon while you drag it keep the standard
-  look — those are left to the real Dock, along with notification badges and running dots.
-- Only a horizontal Dock at the bottom of a non-Retina (1x) display is covered. On a
-  Retina display, or with the Dock on the left or right, Clean Dock idles.
-- The Trash and folders kept in the Dock as a stack need their optional permission
-  (Automation → Finder, and folder access). Without it they keep the standard icon.
+I've only tested it on my own setup: macOS 27, one 3440×1440 monitor next to a MacBook. It should
+work on any non-Retina monitor from macOS 14 up, but if it doesn't on yours, please open an issue
+and tell me what you have.
 
-## Development
+## Hacking on it
 
 ```
-swift test          # unit tests for the pure logic in CleanDockCore
-swift run CleanDock # run from the terminal (the terminal needs Accessibility permission)
-swift run CleanDock --dump           # print what Clean Dock reads from the Dock
-make app            # build/CleanDock.app, ad-hoc signed
+swift test                   # tests for the drawing and geometry code
+swift run CleanDock          # run it from a terminal that has Accessibility permission
+swift run CleanDock --dump   # print what it reads from the Dock
+make app                     # builds build/CleanDock.app
 ```
 
-Every `make app` produces a new ad-hoc signature, and macOS then treats the app as a new
-one. After rebuilding, remove Clean Dock from System Settings → Privacy & Security →
-Accessibility and grant it again, or run `tccutil reset Accessibility app.cleandock.CleanDock`.
+One annoyance: the app is ad-hoc signed, so after every `make app` macOS thinks it's a different
+app and forgets the Accessibility permission. Remove it from the Accessibility list and add it
+again, or run `tccutil reset Accessibility app.cleandock.CleanDock`.
 
-
-## License
-
-MIT
+MIT licensed.
