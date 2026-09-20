@@ -61,7 +61,6 @@ Every `make app` produces a new ad-hoc signature, and macOS then treats the app 
 one. After rebuilding, remove Clean Dock from System Settings → Privacy & Security →
 Accessibility and grant it again, or run `tccutil reset Accessibility app.cleandock.CleanDock`.
 
-`docs/manual-test-checklist.md` lists what to check by eye before a release.
 
 ## License
 
