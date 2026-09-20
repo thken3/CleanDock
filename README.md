@@ -2,9 +2,9 @@
 
 Sharp Dock icons on non-Retina displays. Free and open source.
 
-On a 1x display the macOS Dock draws small icons by downscaling a 128 px image with a
-cheap filter, at fractional pixel positions. The result is blurry, and no setting fixes
-it. Clean Dock draws a properly downscaled, pixel-aligned copy of every icon exactly on
+On a 1x display the macOS Dock draws small icons by point-sampling a 128 px image: for a
+17 px icon it reads about 4 of every 56 pixels. The result is ragged and smeared, and no
+setting fixes it. Clean Dock draws a properly downscaled, pixel-aligned copy of every icon exactly on
 top of the blurry one. The Dock itself is untouched: every click, drag, menu and
 animation is still the real Dock.
 

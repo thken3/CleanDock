@@ -67,39 +67,24 @@ public enum IconRenderer {
     }
 
     /// What the standard Dock makes of the same icon on a 1x display, for the before/after preview.
-    /// Measured: the Dock starts from the 128 px representation and places the icon between pixels. The
-    /// softness is what GPU trilinear filtering does with that: for 128 → 17 px it blends the 32 px and,
-    /// mostly, the 16 px mip level — a 16 px image stretched to 17.
-    public static func renderStandardDock(_ images: [NSImage], side: Int, offset: Double = 0.225) -> CGImage? {
+    /// Fitted against captures of the real Dock: of all candidates (mip-mapped, trilinear, other source sizes)
+    /// plain bilinear sampling of the 128 px representation matched best by a wide margin. At 128 → 17 px
+    /// that reads only 4 of every ~56 source pixels, so fine detail turns into jagged, uneven pixels.
+    public static func renderStandardDock(_ images: [NSImage], side: Int) -> CGImage? {
         guard side > 0, let base = render(images, side: 128) else { return nil }
-        var levels = [pixels(of: base)]                       // premultiplied RGBA, 128 px down to 1 px
-        var size = 128
-        while size > 1 {
-            let source = levels[levels.count - 1], half = size / 2
-            var next = [Double](repeating: 0, count: half * half * 4)
-            for y in 0..<half { for x in 0..<half { for c in 0..<4 {
-                let a = (y * 2 * size + x * 2) * 4 + c
-                next[(y * half + x) * 4 + c] = (source[a] + source[a + 4] + source[a + size * 4] + source[a + size * 4 + 4]) / 4
-            } } }
-            levels.append(next)
-            size = half
-        }
-        func sample(_ level: Int, _ u: Double, _ v: Double, _ c: Int) -> Double {      // bilinear, clamped
-            let n = 128 >> level, data = levels[level]
-            let x = min(max(u * Double(n) - 0.5, 0), Double(n - 1)), y = min(max(v * Double(n) - 0.5, 0), Double(n - 1))
-            let x0 = Int(x), y0 = Int(y), x1 = min(x0 + 1, n - 1), y1 = min(y0 + 1, n - 1)
-            let fx = x - Double(x0), fy = y - Double(y0)
-            func at(_ px: Int, _ py: Int) -> Double { data[(py * n + px) * 4 + c] }
-            return (at(x0, y0) * (1 - fx) + at(x1, y0) * fx) * (1 - fy) + (at(x0, y1) * (1 - fx) + at(x1, y1) * fx) * fy
-        }
-        let lod = min(max(log2(128 / Double(side)), 0), Double(levels.count - 1))
-        let lower = Int(lod), upper = min(lower + 1, levels.count - 1), blend = lod - Double(lower)
+        let source = pixels(of: base), n = 128
         var out = [UInt8](repeating: 0, count: side * side * 4)
-        for y in 0..<side { for x in 0..<side { for c in 0..<4 {
-            let u = (Double(x) + 0.5 - offset) / Double(side), v = (Double(y) + 0.5 - offset) / Double(side)
-            let value = sample(lower, u, v, c) * (1 - blend) + sample(upper, u, v, c) * blend
-            out[(y * side + x) * 4 + c] = UInt8(min(max(value.rounded(), 0), 255))
-        } } }
+        for y in 0..<side { for x in 0..<side {
+            let u = min(max((Double(x) + 0.5) / Double(side) * Double(n) - 0.5, 0), Double(n - 1))
+            let v = min(max((Double(y) + 0.5) / Double(side) * Double(n) - 0.5, 0), Double(n - 1))
+            let x0 = Int(u), y0 = Int(v), x1 = min(x0 + 1, n - 1), y1 = min(y0 + 1, n - 1)
+            let fx = u - Double(x0), fy = v - Double(y0)
+            for c in 0..<4 {
+                func at(_ px: Int, _ py: Int) -> Double { source[(py * n + px) * 4 + c] }
+                let value = (at(x0, y0) * (1 - fx) + at(x1, y0) * fx) * (1 - fy) + (at(x0, y1) * (1 - fx) + at(x1, y1) * fx) * fy
+                out[(y * side + x) * 4 + c] = UInt8(min(max(value.rounded(), 0), 255))
+            }
+        } }
         return out.withUnsafeMutableBytes { buffer in
             CGContext(data: buffer.baseAddress, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side * 4,
                       space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?.makeImage()

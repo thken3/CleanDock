@@ -117,19 +117,21 @@ private let green: [UInt8] = [0, 255, 0, 255]
     #expect(data[peek + 1] > 150)
 }
 
-@Test func standardDockSimulationHasTheRequestedSizeAndIsSofter() throws {
-    // A hard vertical edge that lands exactly on a pixel boundary at the target size (64 / 136 * 17 = 8).
-    let edge = makeImage(side: 136) { x, _ in x < 64 ? [0, 0, 0, 255] : [255, 255, 255, 255] }
-    let standard = try #require(IconRenderer.renderStandardDock([edge], side: 17))
+@Test func standardDockSimulationHasTheRequestedSizeAndAliases() throws {
+    // 2 px checks at 128 px are far below what 17 px can show: a proper downscale gives even grey,
+    // the Dock's bilinear point sampling gives an uneven pattern.
+    let fine = makeImage(side: 128) { x, y in ((x / 2) + (y / 2)) % 2 == 0 ? [255, 255, 255, 255] : [0, 0, 0, 255] }
+    let standard = try #require(IconRenderer.renderStandardDock([fine], side: 17))
     #expect(standard.width == 17)
     #expect(standard.height == 17)
-    func greys(_ data: [UInt8]) -> Int {        // pixels of the middle row that are neither black nor white
-        (0..<17).filter { (40...215).contains(Int(data[(8 * 17 + $0) * 4])) }.count
+    func spread(_ data: [UInt8]) -> Int {       // lightest minus darkest pixel of the interior
+        let values = (4..<13).flatMap { y in (4..<13).map { x in Int(data[(y * 17 + x) * 4]) } }
+        return values.max()! - values.min()!
     }
-    let clean = greys(bytes(try #require(IconRenderer.render([edge], side: 17))))
-    let soft = greys(bytes(standard))
-    #expect(clean <= 1)         // the clean render keeps the edge within one pixel
-    #expect(soft > clean)       // the Dock's method smears it across several
+    let clean = spread(bytes(try #require(IconRenderer.render([fine], side: 17))))
+    let aliased = spread(bytes(standard))
+    #expect(clean < 40)
+    #expect(aliased > clean + 60)
 }
 
 @Test func standardDockSimulationOfNothingIsNil() {
