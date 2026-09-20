@@ -38,11 +38,15 @@ final class AppController {
         }
     }
 
+    private lazy var dockObserver = DockObserver { [weak self] in self?.tracker.kick() }
+
     func start() {
         icons.onChange = { [weak self] changes in self?.iconsChanged(changes) }
         let workspace = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.willLaunchApplicationNotification, NSWorkspace.didLaunchApplicationNotification,
-                     NSWorkspace.didTerminateApplicationNotification, NSWorkspace.activeSpaceDidChangeNotification] {
+                     NSWorkspace.didTerminateApplicationNotification, NSWorkspace.activeSpaceDidChangeNotification,
+                     // restoring a minimized window activates its app; the Dock announces the tile's end only after it started sliding
+                     NSWorkspace.didActivateApplicationNotification] {
             workspace.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in self?.tracker.kick() }
         }
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
@@ -59,6 +63,12 @@ final class AppController {
                 DispatchQueue.main.async { self?.dropCacheAndRefresh() }
             }
         }
+        // A relaunched Dock is a new process: attach to it again.
+        workspace.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            if app?.bundleIdentifier == "com.apple.dock" { self?.dockObserver.attach() }
+        }
+        dockObserver.attach()
         installMouseMonitors()
         tracker.start()
     }
@@ -68,7 +78,9 @@ final class AppController {
     func refresh() {
         // Wake a suspended tracker first: `apply` can only decide the real status from a fresh read,
         // and a suspended tracker ignores `kick()`.
-        if enabled, AXIsProcessTrusted() { tracker.setMode(.watching) }
+        // Only when it is not tracking already: downgrading an active tracker would cut its burst short.
+        if enabled, AXIsProcessTrusted(), status != .active { tracker.setMode(.watching) }
+        dockObserver.attach()       // no-op when attached; picks up a permission granted after launch
         apply(last)
         tracker.kick()
     }
@@ -110,10 +122,11 @@ final class AppController {
         add(.leftMouseDown) { c in
             c.pressed = nil                          // a missed mouse-up must not leave this armed
             c.draggedTile = nil
-            guard let p = c.pointer() else { return }
+            guard let p = c.pointer(), let frame = c.last?.listFrame, frame.insetBy(dx: -20, dy: -20).contains(p) else { return }
+            // Any click in the Dock can move it: a minimized-window tile (which is not in `tiles`) restores and the rest slides back.
+            c.tracker.kick()
             guard let tile = c.last?.tiles.first(where: { $0.frame.contains(p) }) else { return }
             c.pressed = (TileIdentity(kind: tile.kind, url: tile.url), p)
-            c.tracker.kick()
         }
         add(.leftMouseDragged) { c in
             guard let p = c.pointer() else { return }

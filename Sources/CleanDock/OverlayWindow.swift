@@ -15,7 +15,6 @@ final class OverlayWindow {
         window.isReleasedWhenClosed = false
         window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.dockWindow)) + 1)
         window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
-        root.isGeometryFlipped = true        // layer coordinates: top-left origin, like the rects we get
         let view = NSView()
         view.layer = root
         view.wantsLayer = true
@@ -39,9 +38,14 @@ final class OverlayWindow {
             root.addSublayer(layer)
             layers.append(layer)
         }
+        // AppKit owns the hosting layer's orientation, and it differs between a bare binary and a bundled app,
+        // so ask instead of assuming: our rects have a top-left origin.
+        let flipped = root.isGeometryFlipped
+        let height = window.frame.height
         for (index, layer) in layers.enumerated() {
             if index < items.count {
-                layer.frame = items[index].rect
+                let rect = items[index].rect
+                layer.frame = flipped ? rect : CGRect(x: rect.minX, y: height - rect.maxY, width: rect.width, height: rect.height)
                 layer.contents = items[index].image
                 layer.isHidden = false
             } else {

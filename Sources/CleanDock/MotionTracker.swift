@@ -5,7 +5,7 @@ import Foundation
 ///
 /// - `.tracking`: a cheap outline check every 0.5 s (plus a full comparison every fourth tick, which catches
 ///   badge changes), and on every `kick()` a burst that reads the Dock as fast as it answers and forwards
-///   every change until it has been stable for 0.3 s.
+///   every change until it has been stable for 0.5 s (the Dock pauses about 0.3 s between creating a tile and sliding).
 /// - `.watching`: the overlay is not drawn, so there is nothing to follow. The timer ticks every 2 s and only
 ///   compares the cheap outline; a change, and every `kick()`, costs exactly one snapshot read. That one read
 ///   is what lets `AppController` notice the Dock came back to a 1x display.
@@ -66,7 +66,7 @@ final class MotionTracker {
         queue.async { [weak self] in self?.scheduleTimer() }
     }
 
-    /// Starts a read, or keeps a running burst alive for at least another 0.3 s. Safe from any thread.
+    /// Starts a read, or keeps a running burst alive for at least another 0.5 s. Safe from any thread.
     /// Does nothing while suspended.
     func kick() {
         lock.lock()
@@ -98,7 +98,7 @@ final class MotionTracker {
     }
 
     private func burst() {
-        var detector = StabilityDetector<DockSnapshot?>(quietPeriod: 0.3)
+        var detector = StabilityDetector<DockSnapshot?>(quietPeriod: 0.5)
         while true {
             lock.lock()
             let mode = self.mode
@@ -121,12 +121,12 @@ final class MotionTracker {
             }
 
             lock.lock()
-            // `.tracking` keeps reading until the Dock has been quiet for 0.3 s and no kick is newer than that.
+            // `.tracking` keeps reading until the Dock has been quiet for 0.5 s and no kick is newer than that.
             // `.watching` stops after this one read unless a kick arrived while it was running. Both decisions
             // are made in the same critical section that `kick()` uses, so a kick can never be lost: either it
             // lands before this and forces another iteration, or it lands after `bursting` went false and
             // starts a new burst itself.
-            let done = mode == .tracking ? (result.settled && now - kickedAt > 0.3) : (kicks == seen)
+            let done = mode == .tracking ? (result.settled && now - kickedAt > 0.5) : (kicks == seen)
             if done { bursting = false }
             lock.unlock()
             if done { break }
