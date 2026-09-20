@@ -32,8 +32,9 @@ y=$((y - 14))
 w=$((w + 16))
 h=$((h + 28))
 
-raw="$(mktemp /tmp/cleandock-shot.XXXXXX).png"
-trap 'rm -f "$raw"' EXIT
+stem="$(mktemp /tmp/cleandock-shot.XXXXXX)"
+raw="$stem.png"
+trap 'rm -f "$stem" "$raw"' EXIT      # mktemp makes the extension-less file; screencapture makes the .png
 
 /usr/sbin/screencapture -x -R"$x","$y","$w","$h" "$raw"
 swift Tools/zoom.swift "$raw" "$out"

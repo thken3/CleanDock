@@ -36,9 +36,16 @@ Clean Dock never captures the screen and never connects to the network.
 
 - Active only while the Dock is at the bottom of a non-Retina display. Elsewhere it idles.
 - Follows the Dock's animations live: launching, quitting, bouncing, reordering.
-- Leaves to the real Dock: notification badges, running dots, minimized windows, magnified
-  icons, and an icon while you drag it.
 - The menu bar icon has an on/off switch, Launch at Login, and Quit.
+
+## Known limits
+
+- Minimized windows, magnified icons and an icon while you drag it keep the standard
+  look — those are left to the real Dock, along with notification badges and running dots.
+- Only a horizontal Dock at the bottom of a non-Retina (1x) display is covered. On a
+  Retina display, or with the Dock on the left or right, Clean Dock idles.
+- The Trash and folders kept in the Dock as a stack need their optional permission
+  (Automation → Finder, and folder access). Without it they keep the standard icon.
 
 ## Development
 
