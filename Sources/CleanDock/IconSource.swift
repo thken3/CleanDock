@@ -163,8 +163,7 @@ final class IconSource {
                 guard let image = representation?.nsImage else { return }
                 DispatchQueue.main.async {
                     guard let self else { return }
-                    self.thumbnails[url] = image
-                    self.listingMemo.removeValue(forKey: path)      // the stack must be laid out again
+                    self.thumbnails[url] = image     // the listing is unchanged, only what its front items look like
                     self.note(.folder(path))
                 }
             }

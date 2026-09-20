@@ -204,6 +204,11 @@ final class AppController {
     /// The single place the status changes, so everything that costs time while the overlay is not
     /// drawn is switched off with it.
     private func setStatus(_ new: Status) {
+        if status == .active, new != .active {
+            // The mouse monitors are silent unless active, so a mouse-up would not clear these.
+            pressed = nil
+            draggedTile = nil
+        }
         status = new
         tracker.setMode(Self.mode(for: new))
         let hasTrash = last?.tiles.contains { $0.kind == .trash } ?? false
