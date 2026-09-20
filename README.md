@@ -14,10 +14,10 @@ difference than I do, which is sort of the point: on Retina the Dock is fine and
 
 ## Why the Dock looks bad
 
-I measured it. For a small icon the Dock takes the 128 px version of the app icon and shrinks it
-with plain bilinear sampling. At 17 px that means it looks at roughly 4 pixels out of every 56 and
-throws the rest away. Thin lines survive or vanish depending on where they happen to fall. Clearing
-icon caches doesn't help and there is no setting for it.
+For a small icon the Dock takes the 128 px version of the app icon and shrinks it with plain bilinear 
+sampling. At 17 px that means it looks at roughly 4 pixels out of every 56 and throws the rest away. 
+Thin lines survive or vanish depending on where they happen to fall. Clearing icon caches doesn't 
+help and there is no setting for it.
 
 Clean Dock doesn't touch the Dock. It reads where each icon sits, shrinks the full-size icon
 properly, and draws that copy on top of the blurry one in a window that ignores clicks. Everything
@@ -28,10 +28,6 @@ move along with it.
 
 Grab `CleanDock.zip` from the [releases page](https://github.com/thken3/CleanDock/releases), unzip
 it, and drag the app to Applications.
-
-I haven't paid Apple for notarization, so macOS will refuse to open it the first time. Open it
-once, let it complain, then go to System Settings → Privacy & Security and click Open Anyway. On
-macOS 14 you can right-click the app and choose Open instead.
 
 If you'd rather build it yourself:
 
@@ -65,18 +61,5 @@ little running dots are left alone too.
 I've only tested it on my own setup: macOS 27, one 3440×1440 monitor next to a MacBook. It should
 work on any non-Retina monitor from macOS 14 up, but if it doesn't on yours, please open an issue
 and tell me what you have.
-
-## Hacking on it
-
-```
-swift test                   # tests for the drawing and geometry code
-swift run CleanDock          # run it from a terminal that has Accessibility permission
-swift run CleanDock --dump   # print what it reads from the Dock
-make app                     # builds build/CleanDock.app
-```
-
-One annoyance: the app is ad-hoc signed, so after every `make app` macOS thinks it's a different
-app and forgets the Accessibility permission. Remove it from the Accessibility list and add it
-again, or run `tccutil reset Accessibility app.cleandock.CleanDock`.
 
 MIT licensed.
