@@ -49,6 +49,7 @@ final class AppController {
             self?.refresh()
         }
         installMouseMonitors()
+        icons.startTrashPolling()
         tracker.start()
     }
 
