@@ -36,7 +36,9 @@ Clean Dock never captures the screen and never connects to the network.
 
 - Active only while the Dock is at the bottom of a non-Retina display. Elsewhere it idles.
 - Follows the Dock's animations live: launching, quitting, bouncing, reordering.
-- The menu bar icon has an on/off switch, Launch at Login, and Quit.
+- The menu bar icon has an on/off switch, Settings and Quit. Settings shows a live before/after preview of your own
+  Dock icons, the state of each permission, Launch at login, and a switch to hide the menu bar icon.
+- On first launch a short window explains the Accessibility permission before macOS asks for it.
 
 ## Known limits
 

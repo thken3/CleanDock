@@ -5,9 +5,10 @@ APP = build/CleanDock.app
 app:
 	swift build -c release
 	rm -rf $(APP)
-	mkdir -p $(APP)/Contents/MacOS
+	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources
 	cp .build/release/CleanDock $(APP)/Contents/MacOS/CleanDock
 	cp Support/Info.plist $(APP)/Contents/Info.plist
+	cp Support/AppIcon.icns $(APP)/Contents/Resources/AppIcon.icns
 	codesign --force --sign - $(APP)
 
 zip: app

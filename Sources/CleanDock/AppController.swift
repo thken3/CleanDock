@@ -4,6 +4,14 @@ import CleanDockCore
 
 enum Status { case needsPermission, disabled, noDock, verticalDock, retinaDisplay, active }
 
+/// What the windows show about the Dock: where it is and what is in it.
+struct DockInfo {
+    let displayName: String
+    let pixelsPerInch: Int?
+    let side: Int               // icon side in points at rest
+    let tiles: [DockTile]
+}
+
 /// Identifies a tile by what it is, not by its position in the list — the list reorders live during a drag.
 private struct TileIdentity: Equatable {
     let kind: TileKind
@@ -30,6 +38,13 @@ final class AppController {
     private var sideRefreshScheduled = false
 
     private(set) var status = Status.noDock
+    private(set) var dockInfo: DockInfo?
+
+    /// Called on the main queue when the status or the Dock's display changes.
+    var onChange: (() -> Void)?
+
+    /// Source images of a tile, front first — what the preview renders both ways.
+    func images(for tile: DockTile) -> [NSImage] { icons.images(for: tile) }
 
     var enabled: Bool = UserDefaults.standard.object(forKey: "enabled") as? Bool ?? true {
         didSet {
@@ -153,12 +168,13 @@ final class AppController {
         guard snapshot.horizontal else { return stop(.verticalDock) }
         guard let primaryHeight = primaryHeight() else { return stop(.noDock) }
         guard let screen = dockScreen(snapshot, primaryHeight: primaryHeight) else { return stop(.noDock) }
+        let iconRects = snapshot.tiles.map { TileGeometry.iconRect(tile: $0.frame) }
+        let resting = TileGeometry.restingSide(iconRects.map(\.width))
+        noteDock(on: screen, side: Int(resting.rounded()), tiles: snapshot.tiles)
         guard screen.backingScaleFactor == 1 else { return stop(.retinaDisplay) }
         setStatus(.active)
 
         let scale = screen.backingScaleFactor
-        let iconRects = snapshot.tiles.map { TileGeometry.iconRect(tile: $0.frame) }
-        let resting = TileGeometry.restingSide(iconRects.map(\.width))
         let side = Int((resting * scale).rounded())
         let dark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
 
@@ -209,6 +225,18 @@ final class AppController {
         }
     }
 
+    private func noteDock(on screen: NSScreen, side: Int, tiles: [DockTile]) {
+        let changed = dockInfo?.displayName != screen.localizedName || dockInfo?.side != side || dockInfo?.tiles.map(\.url) != tiles.map(\.url)
+        guard changed else { return }
+        var ppi: Int?
+        if let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID {
+            let millimetres = CGDisplayScreenSize(number).width
+            if millimetres > 0 { ppi = Int((Double(CGDisplayPixelsWide(number)) / (Double(millimetres) / 25.4)).rounded()) }
+        }
+        dockInfo = DockInfo(displayName: screen.localizedName, pixelsPerInch: ppi, side: side, tiles: tiles)
+        onChange?()
+    }
+
     private func stop(_ status: Status) {
         setStatus(status)
         overlay.clear()
@@ -222,8 +250,10 @@ final class AppController {
             pressed = nil
             draggedTile = nil
         }
+        let changed = status != new
         status = new
         tracker.setMode(Self.mode(for: new))
+        if changed { onChange?() }
         let hasTrash = last?.tiles.contains { $0.kind == .trash } ?? false
         icons.setTrashPolling(new == .active && hasTrash)
     }

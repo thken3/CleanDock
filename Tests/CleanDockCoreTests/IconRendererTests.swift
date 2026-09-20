@@ -116,3 +116,22 @@ private let green: [UInt8] = [0, 255, 0, 255]
     #expect(data[peek] == 0)
     #expect(data[peek + 1] > 150)
 }
+
+@Test func standardDockSimulationHasTheRequestedSizeAndIsSofter() throws {
+    // A hard vertical edge that lands exactly on a pixel boundary at the target size (64 / 136 * 17 = 8).
+    let edge = makeImage(side: 136) { x, _ in x < 64 ? [0, 0, 0, 255] : [255, 255, 255, 255] }
+    let standard = try #require(IconRenderer.renderStandardDock([edge], side: 17))
+    #expect(standard.width == 17)
+    #expect(standard.height == 17)
+    func greys(_ data: [UInt8]) -> Int {        // pixels of the middle row that are neither black nor white
+        (0..<17).filter { (40...215).contains(Int(data[(8 * 17 + $0) * 4])) }.count
+    }
+    let clean = greys(bytes(try #require(IconRenderer.render([edge], side: 17))))
+    let soft = greys(bytes(standard))
+    #expect(clean <= 1)         // the clean render keeps the edge within one pixel
+    #expect(soft > clean)       // the Dock's method smears it across several
+}
+
+@Test func standardDockSimulationOfNothingIsNil() {
+    #expect(IconRenderer.renderStandardDock([], side: 17) == nil)
+}
