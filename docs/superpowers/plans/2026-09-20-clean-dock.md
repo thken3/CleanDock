@@ -265,7 +265,7 @@ import Testing
 }
 
 @Test func widerLabelsCutFurtherLeft() {
-    #expect(BadgeCutout.rect(side: 17, label: "42") == CGRect(x: 7, y: 0, width: 10, height: 8))
+    #expect(BadgeCutout.rect(side: 17, label: "42") == CGRect(x: 6, y: 0, width: 11, height: 8))
     #expect(BadgeCutout.rect(side: 17, label: "130") == CGRect(x: 5, y: 0, width: 12, height: 8))
 }
 
