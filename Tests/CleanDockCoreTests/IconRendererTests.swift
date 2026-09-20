@@ -3,18 +3,22 @@ import Testing
 @testable import CleanDockCore
 
 /// Opaque or transparent test image; `pixel` returns RGBA for a position, y = 0 is the top row.
-private func makeImage(side: Int, pixel: (Int, Int) -> [UInt8]) -> NSImage {
-    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: side, pixelsHigh: side, bitsPerSample: 8, samplesPerPixel: 4,
-                               hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: side * 4, bitsPerPixel: 32)!
-    for y in 0..<side {
-        for x in 0..<side {
+private func makeImage(width: Int, height: Int, pixel: (Int, Int) -> [UInt8]) -> NSImage {
+    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8, samplesPerPixel: 4,
+                               hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: width * 4, bitsPerPixel: 32)!
+    for y in 0..<height {
+        for x in 0..<width {
             let p = pixel(x, y)
-            for c in 0..<4 { rep.bitmapData![(y * side + x) * 4 + c] = p[c] }
+            for c in 0..<4 { rep.bitmapData![(y * width + x) * 4 + c] = p[c] }
         }
     }
-    let image = NSImage(size: NSSize(width: side, height: side))
+    let image = NSImage(size: NSSize(width: width, height: height))
     image.addRepresentation(rep)
     return image
+}
+
+private func makeImage(side: Int, pixel: (Int, Int) -> [UInt8]) -> NSImage {
+    makeImage(width: side, height: side, pixel: pixel)
 }
 
 /// RGBA bytes of an image, top row first.
@@ -63,6 +67,36 @@ private let green: [UInt8] = [0, 255, 0, 255]
     #expect(data[(7 * 17 + 16) * 4 + 3] == 0)     // bottom-right corner of the cutout
     #expect(data[(0 * 17 + 7) * 4 + 3] == 255)    // left of the cutout
     #expect(data[(8 * 17 + 16) * 4 + 3] == 255)   // below the cutout
+}
+
+@Test func wideSourceIsAspectFittedNotStretched() throws {
+    // a 200×100 QuickLook thumbnail at side 20 becomes 20×10, centred: rows 0–4 and 15–19 stay empty
+    let data = bytes(try #require(IconRenderer.render([makeImage(width: 200, height: 100) { _, _ in red }], side: 20)))
+    func alpha(_ x: Int, _ y: Int) -> UInt8 { data[(y * 20 + x) * 4 + 3] }
+    for y in Array(0..<5) + Array(15..<20) {
+        for x in 0..<20 { #expect(alpha(x, y) == 0) }
+    }
+    #expect(alpha(10, 10) == 255)
+    let centre = (10 * 20 + 10) * 4
+    #expect(Array(data[centre..<centre + 4]) == red)
+}
+
+@Test func tallSourceIsAspectFittedNotStretched() throws {
+    let data = bytes(try #require(IconRenderer.render([makeImage(width: 100, height: 200) { _, _ in red }], side: 20)))
+    func alpha(_ x: Int, _ y: Int) -> UInt8 { data[(y * 20 + x) * 4 + 3] }
+    for x in Array(0..<5) + Array(15..<20) {
+        for y in 0..<20 { #expect(alpha(x, y) == 0) }
+    }
+    #expect(alpha(10, 10) == 255)
+}
+
+@Test func squareSourceStillFillsTheCanvas() throws {
+    // no aspect-fit padding anywhere: every pixel including the corners is covered (Lanczos softens the outermost edge)
+    let data = bytes(try #require(IconRenderer.render([makeImage(side: 200) { _, _ in red }], side: 20)))
+    for y in 0..<20 {
+        for x in 0..<20 { #expect(data[(y * 20 + x) * 4 + 3] > 0) }
+    }
+    #expect(data[(10 * 20 + 10) * 4 + 3] == 255)
 }
 
 @Test func pileLayoutFrontLowAndLargeOthersSmallerAndHigher() {

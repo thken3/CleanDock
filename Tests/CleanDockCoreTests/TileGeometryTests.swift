@@ -47,6 +47,49 @@ import Testing
     #expect(r.origin == CGPoint(x: 10, y: 1400))
 }
 
+@Test func accessibilityFrameFlipsAroundThePrimary() {
+    #expect(TileGeometry.accessibilityFrame(CGRect(x: 0, y: 0, width: 1800, height: 1169), primaryHeight: 1169)
+            == CGRect(x: 0, y: 0, width: 1800, height: 1169))
+    // a display above the primary sits at negative y in Accessibility coordinates
+    #expect(TileGeometry.accessibilityFrame(CGRect(x: 0, y: 1169, width: 2560, height: 1440), primaryHeight: 1169)
+            == CGRect(x: 0, y: -1440, width: 2560, height: 1440))
+    #expect(TileGeometry.accessibilityFrame(CGRect(x: -3440, y: 0, width: 3440, height: 1440), primaryHeight: 1169)
+            == CGRect(x: -3440, y: -271, width: 3440, height: 1440))
+}
+
+private let primaryAX = CGRect(x: 0, y: 0, width: 1800, height: 1169)
+private let upperAX = CGRect(x: 0, y: -1440, width: 2560, height: 1440)
+
+@Test func stackedDisplaysPickTheOneThatReallyContainsTheDock() {
+    // Dock at the bottom of the upper display; the primary is listed first and would win any inflated pass.
+    #expect(TileGeometry.screenIndex(containing: CGPoint(x: 900, y: -30), screens: [primaryAX, upperAX], margin: 150) == 1)
+    // Dock at the bottom of the primary
+    #expect(TileGeometry.screenIndex(containing: CGPoint(x: 900, y: 1140), screens: [primaryAX, upperAX], margin: 150) == 0)
+}
+
+@Test func sideBySideDisplays() {
+    let leftAX = CGRect(x: -3440, y: -271, width: 3440, height: 1440)
+    #expect(TileGeometry.screenIndex(containing: CGPoint(x: -1700, y: 1140), screens: [primaryAX, leftAX], margin: 150) == 1)
+    #expect(TileGeometry.screenIndex(containing: CGPoint(x: 900, y: 1140), screens: [primaryAX, leftAX], margin: 150) == 0)
+}
+
+@Test func anAutoHiddenDockBelowTheScreenIsStillFound() {
+    #expect(TileGeometry.screenIndex(containing: CGPoint(x: 900, y: 1200), screens: [primaryAX, upperAX], margin: 150) == 0)
+}
+
+@Test func theInflatedPassTakesTheNearestCandidate() {
+    let belowAX = CGRect(x: 0, y: 1200, width: 1800, height: 800)
+    // 31 pt below the primary's bottom edge and 20 pt above the lower display's top edge
+    #expect(TileGeometry.screenIndex(containing: CGPoint(x: 100, y: 1180), screens: [belowAX, primaryAX], margin: 150) == 1)
+    #expect(TileGeometry.screenIndex(containing: CGPoint(x: 100, y: 1190), screens: [primaryAX, belowAX], margin: 150) == 1)
+}
+
+@Test func aPointFarFromEveryScreenHasNoScreen() {
+    #expect(TileGeometry.screenIndex(containing: CGPoint(x: 5000, y: 5000), screens: [primaryAX, upperAX], margin: 150) == nil)
+    #expect(TileGeometry.screenIndex(containing: CGPoint(x: 900, y: 1400), screens: [primaryAX], margin: 150) == nil)
+    #expect(TileGeometry.screenIndex(containing: .zero, screens: [], margin: 150) == nil)
+}
+
 @Test func snappedToWholePixels() {
     #expect(TileGeometry.snapped(CGRect(x: 1688.225, y: 1411, width: 17, height: 17), scale: 1) == CGRect(x: 1688, y: 1411, width: 17, height: 17))
     #expect(TileGeometry.snapped(CGRect(x: 10.3, y: 5.26, width: 17, height: 17), scale: 2) == CGRect(x: 10.5, y: 5.5, width: 17, height: 17))

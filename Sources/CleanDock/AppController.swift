@@ -120,7 +120,7 @@ final class AppController {
             guard TileIdentity(kind: tile.kind, url: tile.url) != draggedTile,   // the real drag image must be visible
                   iconRect.width <= resting + 0.5,            // magnified tiles stay uncovered
                   let source = icons.key(for: tile) else { continue }
-            let key = RenderKey(path: source.path, modified: source.modified, side: side, dark: dark, badgeLength: tile.badge.count)
+            let key = RenderKey(path: source.path, modified: source.modified, side: side, dark: dark, badgeLength: tile.badge.count, variant: "")
             let image = cache.image(for: key) {
                 IconRenderer.render(icons.images(for: tile), side: side, cutout: BadgeCutout.rect(side: side, label: tile.badge))
             }
