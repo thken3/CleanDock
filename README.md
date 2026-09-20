@@ -15,7 +15,7 @@ Applications. The app is not notarized, so the first time right-click it and cho
 Open. Or build it yourself:
 
 ```
-git clone <repository url>
+git clone https://github.com/thken3/CleanDock.git
 cd CleanDock
 make app
 open build/CleanDock.app
