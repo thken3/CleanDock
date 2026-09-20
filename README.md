@@ -2,6 +2,8 @@
 
 Sharp Dock icons on non-Retina displays. Free and open source.
 
+![The same Dock icons drawn by the standard Dock and by Clean Dock, with a divider sliding between them](.github/preview.gif)
+
 On a 1x display the macOS Dock draws small icons by point-sampling a 128 px image: for a
 17 px icon it reads about 4 of every 56 pixels. The result is ragged and smeared, and no
 setting fixes it. Clean Dock draws a properly downscaled, pixel-aligned copy of every icon exactly on
@@ -11,8 +13,8 @@ animation is still the real Dock.
 ## Install
 
 Download `CleanDock.zip` from the releases page, unzip it and move `CleanDock.app` to
-Applications. The app is not notarized, so the first time right-click it and choose
-Open. Or build it yourself:
+Applications. The app is not notarized, so macOS blocks the first launch: open it once, then go to
+System Settings → Privacy & Security and choose Open Anyway (on macOS 14, right-click the app and choose Open). Or build it yourself:
 
 ```
 git clone https://github.com/thken3/CleanDock.git
