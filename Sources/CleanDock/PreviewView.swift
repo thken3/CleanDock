@@ -65,23 +65,15 @@ struct PreviewView: View {
 
     private var stripWidth: CGFloat { side * CGFloat(state.icons.count) + gap * CGFloat(max(state.icons.count - 1, 0)) }
 
-    private func row(_ image: KeyPath<PreviewIcon, CGImage>) -> some View {
-        HStack(spacing: gap) {
-            ForEach(state.icons) { icon in
-                Image(decorative: icon[keyPath: image], scale: 1).interpolation(.none).resizable().frame(width: side, height: side)
-            }
-        }
-    }
-
     private var strip: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
             ZStack {
                 RoundedRectangle(cornerRadius: 13).fill(Color.gray.opacity(0.28))
                 RoundedRectangle(cornerRadius: 13).strokeBorder(Color.white.opacity(0.22), lineWidth: 0.5)
-                row(\.standard)
-                row(\.clean).frame(width: width, height: proxy.size.height)
-                    .mask(alignment: .leading) { Rectangle().padding(.leading, width * fraction) }
+                if let strip = state.strip {
+                    PixelCompareView(standard: strip.standard, clean: strip.clean, fraction: fraction)
+                }
                 divider(height: proxy.size.height, knob: true).position(x: width * fraction, y: proxy.size.height / 2)
             }
             .contentShape(Rectangle())
@@ -89,7 +81,7 @@ struct PreviewView: View {
                 .onChanged { fraction = min(max($0.location.x / width, 0), 1) }
                 .onEnded { value in
                     guard abs(value.translation.width) < 3 else { return }      // a click, not a drag: pick the icon
-                    let local = value.location.x - (width - stripWidth) / 2
+                    let local = value.location.x - ((width - stripWidth) / 2).rounded()
                     let index = Int((local / (side + gap)).rounded(.down))
                     if local >= 0, state.icons.indices.contains(index) { selected = index }
                 })
@@ -110,20 +102,8 @@ struct PreviewView: View {
         return ZStack {
             Color.gray.opacity(0.1)
             if let icon = selectedIcon {
-                Image(decorative: icon.standard, scale: 1).interpolation(.none).resizable()
-                    .accessibilityLabel("Standard Dock rendering")
-                Image(decorative: icon.clean, scale: 1).interpolation(.none).resizable()
-                    .mask(alignment: .leading) { Rectangle().padding(.leading, size * fraction) }
-                    .accessibilityLabel("Clean Dock rendering")
-            }
-            Canvas { context, canvas in
-                var grid = Path()
-                for k in 1..<max(state.side, 2) {
-                    let p = CGFloat(k * magnification)
-                    grid.move(to: CGPoint(x: p, y: 0)); grid.addLine(to: CGPoint(x: p, y: canvas.height))
-                    grid.move(to: CGPoint(x: 0, y: p)); grid.addLine(to: CGPoint(x: canvas.width, y: p))
-                }
-                context.stroke(grid, with: .color(.gray.opacity(0.28)), lineWidth: 0.5)
+                PixelCompareView(standard: icon.standard, clean: icon.clean, fraction: fraction, magnification: magnification, grid: true)
+                    .accessibilityLabel("Standard Dock rendering left of the divider, Clean Dock rendering right of it")
             }
             divider(height: size, knob: false).position(x: size * fraction, y: size / 2)
         }

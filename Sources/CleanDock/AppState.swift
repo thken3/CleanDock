@@ -30,6 +30,7 @@ final class AppState: ObservableObject {
     @Published var finder = PermissionState.notAsked
     @Published var folders: [(name: String, granted: Bool)] = []
     @Published var icons: [PreviewIcon] = []
+    @Published var strip: (standard: CGImage, clean: CGImage)?
     @Published var side = 17
     @Published var caption = ""
     @Published var launchAtLogin = false
@@ -136,6 +137,11 @@ final class AppState: ObservableObject {
                       let clean = IconRenderer.render(source.images, side: side) else { return nil }
                 return PreviewIcon(id: index, name: source.name, standard: standard, clean: clean)
             }
+            if let standard = Self.row(icons.map(\.standard), side: side), let clean = Self.row(icons.map(\.clean), side: side) {
+                strip = (standard, clean)
+            } else {
+                strip = nil
+            }
         }
         var parts = ["Icon size \(side) px"]
         if let info {
@@ -143,6 +149,21 @@ final class AppState: ObservableObject {
             parts.append("Display \(info.displayName)\(density), \(status == .retinaDisplay ? "Retina" : "non-Retina")")
         }
         caption = parts.joined(separator: " · ")
+    }
+
+    static let stripGap = 7
+
+    /// The icons side by side in one bitmap, so the strip is placed on the pixel grid as a whole.
+    private static func row(_ images: [CGImage], side: Int) -> CGImage? {
+        guard !images.isEmpty else { return nil }
+        let width = images.count * side + (images.count - 1) * stripGap
+        guard let context = CGContext(data: nil, width: width, height: side, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        context.interpolationQuality = .none
+        for (index, image) in images.enumerated() {
+            context.draw(image, in: CGRect(x: index * (side + stripGap), y: 0, width: side, height: side))
+        }
+        return context.makeImage()
     }
 
     // MARK: Permissions
