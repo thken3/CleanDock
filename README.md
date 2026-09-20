@@ -53,7 +53,6 @@ Clean Dock never captures the screen and never connects to the network.
 swift test          # unit tests for the pure logic in CleanDockCore
 swift run CleanDock # run from the terminal (the terminal needs Accessibility permission)
 swift run CleanDock --dump           # print what Clean Dock reads from the Dock
-Tools/dock-shot.sh out.png   # 8x zoom of the Dock strip (developer tool; the terminal needs Screen Recording)
 make app            # build/CleanDock.app, ad-hoc signed
 ```
 
