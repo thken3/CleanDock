@@ -82,12 +82,11 @@ everything that touches the system.
 ### CleanDockCore (library)
 
 - **TileGeometry.** Converts a tile frame from Accessibility coordinates (top-left
-  origin, points, possibly fractional) into the whole-pixel icon rectangle in window
-  coordinates. Measured at tile size 17: the tile frame is 19 × 31 pt, the icon canvas
-  is a square of `tile.width − 2`, at `x = tile.minX + 1`, `y = tile.minY + 7`. The
-  result is rounded to whole pixels, at rest and during motion. The implementation
-  plan includes a calibration step that measures these offsets at tile sizes 16 to 64
-  and replaces the constants with a formula if they vary.
+  origin, points, possibly fractional) into the whole-pixel icon rectangle in screen
+  coordinates. Calibrated at tile sizes 16 to 96: the tile frame is 2 pt wider than
+  the tile size and 12 pt taller than wide below tile size 48, and 4 pt wider and
+  16 pt taller from 48 up. The icon canvas is a square of the tile size, centred in
+  the tile frame. The result is rounded to whole pixels, at rest and during motion.
 - **BadgeCutout.** Computes the region at the top right of a tile where the real
   notification badge must stay visible, from the tile rectangle and the badge label
   length. The overlay leaves this region transparent.
@@ -98,8 +97,10 @@ everything that touches the system.
   a bitmap. A single icon is downscaled from its 1024 px representation with
   `CILanczosScaleTransform`. A stack is drawn as a pile: the front item low and large,
   the two behind it smaller and shifted up by one pixel each.
-- **RenderCache.** Caches rendered bitmaps by file path, modification date, pixel size
-  and appearance (light or dark).
+- **RenderCache.** Caches rendered bitmaps by file path, modification date, pixel size,
+  appearance (light or dark) and badge label length. Failed renders are cached too.
+- **StabilityDetector.** Tells a tracking burst when the Dock changed and when it has
+  been still long enough to stop.
 
 ### CleanDock (app)
 
@@ -111,17 +112,19 @@ everything that touches the system.
   (`QLThumbnailGenerator`) of the items chosen by StackOrder, falling back to the file
   icon. The Trash uses the system full or empty Trash image. Stack folder settings
   (`displayas`, `arrangement`) come from the `com.apple.dock` preferences.
-- **OverlayWindow.** One transparent, borderless, click-through window per Dock, at
-  Dock window level + 1, on all Spaces. It holds one layer per covered tile, with
+- **OverlayWindow.** One transparent, borderless, click-through window that covers the
+  Dock's whole screen (so bouncing icons are never clipped), at Dock window level + 1,
+  on all Spaces. It holds one layer per covered tile, with
   implicit animations off and nearest-neighbour filtering so bitmaps map 1:1 to
   pixels.
-- **MotionTracker.** Keeps the overlay glued to the Dock. While idle it does nothing
-  except compare a cheap snapshot every 0.5 s. A tracking burst starts on any trigger:
-  an app launch or quit notification, an Accessibility notification from the Dock, a
-  changed snapshot, a mouse-down inside the Dock, a display or Space change. During a
-  burst a display-synced loop reads tile frames on a background queue and updates the
-  layers every frame: position, size for tiles that grow or shrink, added and removed
-  tiles. The burst ends when all frames have been stable for 0.3 s.
+- **MotionTracker.** Keeps the overlay glued to the Dock. While idle it compares a
+  cheap outline (Dock frame and tile count) every 0.5 s and a full snapshot every 2 s,
+  which catches badge changes. A tracking burst starts on any trigger: an app launch
+  or quit notification, a changed outline or snapshot, a mouse-down on a tile, a drag
+  near the Dock, a display or Space change. During a burst a loop on a background
+  queue reads tile frames as fast as the Dock answers (about 100 times a second) and
+  updates the layers on every change: position, size for tiles that grow or shrink,
+  added and removed tiles. The burst ends when all frames have been stable for 0.3 s.
 - **MenuBar.** Status item with an on/off switch, a launch-at-login toggle
   (`SMAppService`), a line that shows permission problems, and Quit.
 
@@ -131,8 +134,9 @@ everything that touches the system.
   badges.
 - **Running dots, separator, Dock background.** Untouched; they lie outside the icon
   rectangles.
-- **Drag inside the Dock.** On mouse-down over a tile, the layer of that tile hides
-  until mouse-up and stable frames, so the real drag image is visible.
+- **Drag inside the Dock.** When a drag starts on a tile (the pointer moves more than
+  3 pt after mouse-down), the layer of that tile hides until mouse-up, so the real drag
+  image is visible. A plain click does not hide anything.
 - **Magnification.** If a tile's size differs from the resting tile size because of
   magnification, its layer hides until the size returns. Layers are only drawn at the
   resting size and during grow-in or shrink-out.
@@ -179,7 +183,7 @@ Dock moved to the Retina display and back, display unplugged, Dock restarted wit
 ## Build and release
 
 - `swift build` and `swift test` for development. `make app` assembles
-  `CleanDock.app` (Info.plist, icon, ad-hoc signature).
+  `CleanDock.app` (Info.plist, ad-hoc signature).
 - Releases are zips on GitHub. Without a paid Apple Developer account the app is not
   notarized; the README explains right-click → Open and building from source.
 - MIT license. README covers what it does, the permission it needs and why, and the
