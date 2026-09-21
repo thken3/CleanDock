@@ -95,7 +95,7 @@ struct SettingsView: View {
                 if state.folders.isEmpty {
                     Text("No folders in the Dock.").foregroundStyle(.secondary)
                 }
-                ForEach(state.folders, id: \.name) { folder in
+                ForEach(Array(state.folders.enumerated()), id: \.offset) { _, folder in
                     HStack(spacing: 10) {
                         Text(folder.name)
                         Spacer()

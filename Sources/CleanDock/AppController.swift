@@ -30,6 +30,8 @@ final class AppController {
     private var draggedTile: TileIdentity?
     private var monitors: [Any] = []
     private var appearanceObservation: NSKeyValueObservation?
+    private var runningAppsObservation: NSKeyValueObservation?
+    private var magnifies: (value: Bool, checked: TimeInterval)?
 
     // F8: while the Dock is being resized, `side` changes every frame and every tile would be
     // re-rendered from 1024 px on the main queue. Wait until it has held still.
@@ -78,10 +80,10 @@ final class AppController {
                 DispatchQueue.main.async { self?.dropCacheAndRefresh() }
             }
         }
-        // A relaunched Dock is a new process: attach to it again.
-        workspace.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] note in
-            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
-            if app?.bundleIdentifier == "com.apple.dock" { self?.dockObserver.attach() }
+        // A relaunched Dock is a new process: attach to it again. The Dock is a UI-element app, and those
+        // get no launch notification — only the list of running apps tells.
+        runningAppsObservation = NSWorkspace.shared.observe(\.runningApplications) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.dockObserver.attach() }     // no-op unless the Dock's pid changed
         }
         dockObserver.attach()
         installMouseMonitors()
@@ -152,12 +154,27 @@ final class AppController {
             // anything dragged near the Dock makes its tiles move apart
             if let frame = c.last?.listFrame, frame.insetBy(dx: -60, dy: -60).contains(p) { c.tracker.kick() }
         }
+        // A magnifying Dock moves its tiles under the bare pointer, and announces none of it.
+        add(.mouseMoved) { c in
+            guard c.dockMagnifies(), let p = c.pointer(), let frame = c.last?.listFrame,
+                  frame.insetBy(dx: -20, dy: -20).contains(p) else { return }
+            c.tracker.kick()
+        }
         add(.leftMouseUp) { c in
             guard c.pressed != nil else { return }
             c.pressed = nil
             c.draggedTile = nil
             c.refresh()
         }
+    }
+
+    /// The Dock's magnification setting, looked up at most every two seconds: this is asked on every mouse move.
+    private func dockMagnifies() -> Bool {
+        let now = ProcessInfo.processInfo.systemUptime
+        if let magnifies, now - magnifies.checked < 2 { return magnifies.value }
+        let value = UserDefaults(suiteName: "com.apple.dock")?.bool(forKey: "magnification") ?? false
+        magnifies = (value, now)
+        return value
     }
 
     func apply(_ snapshot: DockSnapshot?) {
@@ -169,13 +186,12 @@ final class AppController {
         guard let primaryHeight = primaryHeight() else { return stop(.noDock) }
         guard let screen = dockScreen(snapshot, primaryHeight: primaryHeight) else { return stop(.noDock) }
         let iconRects = snapshot.tiles.map { TileGeometry.iconRect(tile: $0.frame) }
-        let resting = TileGeometry.restingSide(iconRects.map(\.width))
-        noteDock(on: screen, side: Int(resting.rounded()), tiles: snapshot.tiles)
+        let resting = TileGeometry.restingSide(iconRects.map(\.width))      // whole points, and at 1x whole pixels
+        let side = Int(resting)
+        noteDock(on: screen, side: side, tiles: snapshot.tiles)
         guard screen.backingScaleFactor == 1 else { return stop(.retinaDisplay) }
         setStatus(.active)
 
-        let scale = screen.backingScaleFactor
-        let side = Int((resting * scale).rounded())
         let dark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
 
         let now = ProcessInfo.processInfo.systemUptime
@@ -208,7 +224,7 @@ final class AppController {
                 : cache.peek(for: key)
             guard let image else { continue }
             let local = TileGeometry.toScreenLocal(iconRect, screenFrame: screen.frame, primaryHeight: primaryHeight)
-            items.append((TileGeometry.snapped(local, scale: scale), image))
+            items.append((TileGeometry.snapped(local, scale: 1), image))
         }
         overlay.show(on: screen)
         overlay.update(items)

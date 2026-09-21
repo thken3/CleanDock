@@ -16,6 +16,14 @@ public struct PileLayer: Equatable {
 public enum IconRenderer {
     private static let context = CIContext()
 
+    /// The one bitmap format everything here is drawn in: sRGB, 8 bits, premultiplied alpha, nothing interpolated.
+    public static func bitmap(width: Int, height: Int, data: UnsafeMutableRawPointer? = nil) -> CGContext? {
+        let context = CGContext(data: data, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        context?.interpolationQuality = .none
+        return context
+    }
+
     /// Layers of a tile, front first. One image fills the canvas. A pile puts the front image low and large
     /// and each image behind it two pixels smaller and one pixel higher.
     public static func pileLayout(side: Int, count: Int) -> [PileLayer] {
@@ -26,10 +34,7 @@ public enum IconRenderer {
     /// `images` front first. The result is side×side pixels, sRGB, premultiplied alpha, transparent background.
     public static func render(_ images: [NSImage], side: Int, cutout: CGRect? = nil) -> CGImage? {
         guard !images.isEmpty, side > 0,
-              let canvas = CGContext(data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side * 4,
-                                     space: CGColorSpace(name: CGColorSpace.sRGB)!,
-                                     bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
-        canvas.interpolationQuality = .none
+              let canvas = bitmap(width: side, height: side) else { return nil }
         let layers = pileLayout(side: side, count: images.count)
         for (image, layer) in zip(images, layers).reversed() where layer.side > 0 {
             guard let scaled = downscale(image, to: layer.side) else { continue }
@@ -58,10 +63,7 @@ public enum IconRenderer {
         let width = max(1, Int((Double(side) * Double(source.width) / long).rounded()))
         let height = max(1, Int((Double(side) * Double(source.height) / long).rounded()))
         guard let scaled = scale(source, width: width, height: height),
-              let canvas = CGContext(data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side * 4,
-                                     space: CGColorSpace(name: CGColorSpace.sRGB)!,
-                                     bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
-        canvas.interpolationQuality = .none
+              let canvas = bitmap(width: side, height: side) else { return nil }
         canvas.draw(scaled, in: CGRect(x: (side - width) / 2, y: (side - height) / 2, width: width, height: height))
         return canvas.makeImage()
     }
@@ -86,8 +88,7 @@ public enum IconRenderer {
             }
         } }
         return out.withUnsafeMutableBytes { buffer in
-            CGContext(data: buffer.baseAddress, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side * 4,
-                      space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?.makeImage()
+            bitmap(width: side, height: side, data: buffer.baseAddress)?.makeImage()
         }
     }
 
@@ -95,10 +96,7 @@ public enum IconRenderer {
     private static func pixels(of image: CGImage) -> [Double] {
         var data = [UInt8](repeating: 0, count: image.width * image.height * 4)
         data.withUnsafeMutableBytes { buffer in
-            let context = CGContext(data: buffer.baseAddress, width: image.width, height: image.height, bitsPerComponent: 8,
-                                    bytesPerRow: image.width * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
-                                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-            context?.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+            bitmap(width: image.width, height: image.height, data: buffer.baseAddress)?.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
         }
         return data.map(Double.init)
     }

@@ -7,7 +7,7 @@ struct PreviewView: View {
     @State private var fraction = 0.5
     @State private var selected = 0
 
-    private let gap: CGFloat = 7
+    private let gap = CGFloat(AppState.stripGap)
 
     private var side: CGFloat { CGFloat(state.side) }
     private var magnification: Int { max(2, min(8, 140 / max(state.side, 1))) }

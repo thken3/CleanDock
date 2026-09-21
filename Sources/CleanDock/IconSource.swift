@@ -15,7 +15,7 @@ final class IconSource {
 
     private var modifiedMemo: [String: (date: Date?, checked: TimeInterval)] = [:]
     private var displayMemo: [String: (setting: StackArrangement?, checked: TimeInterval)] = [:]
-    private var listingMemo: [String: (items: [StackItem]?, arrangement: StackArrangement, checked: TimeInterval)] = [:]
+    private var listingMemo: [String: (items: [StackItem]?, arrangement: StackArrangement, stamp: Date?, checked: TimeInterval)] = [:]
     private var iconStyleMemo: (value: String, checked: TimeInterval)?
     private var thumbnails: [URL: NSImage] = [:]
     private var requested: Set<URL> = []
@@ -111,12 +111,21 @@ final class IconSource {
 
     /// The folder's contents, memoized for two seconds per folder so a repaint — or a thumbnail arriving —
     /// does not enumerate it again. `nil` means the folder could not be read.
+    ///
+    /// Past the two seconds a listing still stands while the folder's own modification date does: adding,
+    /// removing and renaming all touch it, and a big Downloads folder is slow to enumerate on the main queue.
+    /// Not when ordered by date modified (a file changes without touching its folder), and not for a
+    /// failure (access is granted without touching it either).
     private func stackListing(of folder: URL, arrangement: StackArrangement) -> [StackItem]? {
         let path = folder.path
         let now = ProcessInfo.processInfo.systemUptime
-        if let memo = listingMemo[path], memo.arrangement == arrangement, now - memo.checked < 2 { return memo.items }
+        let stamp = modified(path)
+        if let memo = listingMemo[path], memo.arrangement == arrangement {
+            let unchanged = memo.items != nil && arrangement != .dateModified && stamp != nil && memo.stamp == stamp
+            if unchanged || now - memo.checked < 2 { return memo.items }
+        }
         let items = stackItems(in: folder, arrangement: arrangement)
-        listingMemo[path] = (items, arrangement, now)
+        listingMemo[path] = (items, arrangement, stamp, now)
         return items
     }
 
@@ -133,17 +142,8 @@ final class IconSource {
         guard let urls = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: keys, options: .skipsHiddenFiles) else { return nil }
         guard let key else { return urls.map { StackItem(url: $0, added: nil, modified: nil, created: nil) } }
         return urls.map { url in
-            let date = (try? url.resourceValues(forKeys: [key])).flatMap { values -> Date? in
-                switch key {
-                case .addedToDirectoryDateKey: return values.addedToDirectoryDate
-                case .contentModificationDateKey: return values.contentModificationDate
-                default: return values.creationDate
-                }
-            }
-            return StackItem(url: url,
-                             added: key == .addedToDirectoryDateKey ? date : nil,
-                             modified: key == .contentModificationDateKey ? date : nil,
-                             created: key == .creationDateKey ? date : nil)
+            let values = try? url.resourceValues(forKeys: [key])     // only the requested date is filled in
+            return StackItem(url: url, added: values?.addedToDirectoryDate, modified: values?.contentModificationDate, created: values?.creationDate)
         }
     }
 

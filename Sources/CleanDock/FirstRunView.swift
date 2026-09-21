@@ -1,3 +1,4 @@
+import ServiceManagement
 import SwiftUI
 
 /// Shown on first launch, and whenever Accessibility is missing at launch. Three steps; the second one
@@ -6,7 +7,8 @@ struct FirstRunView: View {
     @ObservedObject var state: AppState
     let close: () -> Void
     @State private var step = 1
-    @State private var launchAtLogin = true
+    // Offered on the very first run; later runs (Accessibility went missing) show what the user chose.
+    @State private var launchAtLogin = !UserDefaults.standard.bool(forKey: "didFirstRun") || SMAppService.mainApp.status == .enabled
 
     var body: some View {
         VStack(spacing: 0) {

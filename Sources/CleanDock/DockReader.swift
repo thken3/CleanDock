@@ -51,13 +51,17 @@ final class DockReader {
         return CGRect(origin: origin, size: size)
     }
 
-    func outline() -> DockOutline? {
+    private func contents() -> (list: AXUIElement, frame: CGRect, items: [AXUIElement])? {
         guard let list = list(), let frame = frame(list), let items: [AXUIElement] = AX.value(list, kAXChildrenAttribute) else { return nil }
-        return DockOutline(frame: frame, count: items.count)
+        return (list, frame, items)
+    }
+
+    func outline() -> DockOutline? {
+        contents().map { DockOutline(frame: $0.frame, count: $0.items.count) }
     }
 
     func snapshot() -> DockSnapshot? {
-        guard let list = list(), let listFrame = frame(list), let items: [AXUIElement] = AX.value(list, kAXChildrenAttribute) else { return nil }
+        guard let (list, listFrame, items) = contents() else { return nil }
         let orientation: String = AX.value(list, kAXOrientationAttribute) ?? "AXHorizontalOrientation"
         var tiles: [DockTile] = []
         for item in items {

@@ -22,6 +22,7 @@ final class AppState: ObservableObject {
     private let controller: AppController
     private var timer: Timer?
     private var previewKey = ""
+    private var seenPreviewKey = ""
     private var foldersCheckedAt: TimeInterval = 0
 
     @Published var status = Status.noDock
@@ -69,15 +70,18 @@ final class AppState: ObservableObject {
     func setLive(_ live: Bool) {
         timer?.invalidate()
         timer = live ? Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.reload() } : nil
-        if live { reload() }
+        guard live else { return }
+        previewKey = ""         // a window opening always gets a fresh preview, at once
+        reload()
     }
 
     func reload() {
         status = controller.status
         accessibility = AXIsProcessTrusted()
-        launchAtLogin = SMAppService.mainApp.status == .enabled
         let info = controller.dockInfo
         displayName = info?.displayName ?? ""
+        guard timer != nil else { return }      // the rest is only seen in a window
+        launchAtLogin = SMAppService.mainApp.status == .enabled
         reloadPreview(info)
         reloadPermissions(info)
     }
@@ -118,17 +122,22 @@ final class AppState: ObservableObject {
         // Rendering is only redone when the Dock's size or its first icons change.
         let shown = accessibility ? Array((info?.tiles ?? []).prefix(count)) : []
         let key = "\(side)|" + shown.map { $0.url?.path ?? "trash" }.joined(separator: "|")
-        if key != previewKey {
+        // A Dock resize changes the key on every step, and each render starts from 1024 px on the main
+        // queue: after the first one, render only a key that held for two reloads in a row.
+        let held = previewKey.isEmpty || key == seenPreviewKey
+        seenPreviewKey = key
+        if key != previewKey, held {
             previewKey = key
+            func name(_ path: String) -> String { FileManager.default.displayName(atPath: path).replacingOccurrences(of: ".app", with: "") }
             var sources: [(name: String, images: [NSImage])] = []
             for tile in shown {
                 let images = controller.images(for: tile)
-                let name = tile.kind == .trash ? "Trash" : (tile.url.map { FileManager.default.displayName(atPath: $0.path) } ?? "Icon")
-                if !images.isEmpty { sources.append((name.replacingOccurrences(of: ".app", with: ""), images)) }
+                let name = tile.kind == .trash ? "Trash" : (tile.url.map { name($0.path) } ?? "Icon")
+                if !images.isEmpty { sources.append((name, images)) }
             }
             if sources.isEmpty {
                 for path in Self.fallbackApps.prefix(count) where FileManager.default.fileExists(atPath: path) {
-                    sources.append((FileManager.default.displayName(atPath: path).replacingOccurrences(of: ".app", with: ""), [NSWorkspace.shared.icon(forFile: path)]))
+                    sources.append((name(path), [NSWorkspace.shared.icon(forFile: path)]))
                 }
             }
             self.side = side
@@ -151,15 +160,13 @@ final class AppState: ObservableObject {
         caption = parts.joined(separator: " · ")
     }
 
-    static let stripGap = 7
+    static let stripGap = 7     // pixels between the strip's icons; `PreviewView` hit-tests with the same number
 
     /// The icons side by side in one bitmap, so the strip is placed on the pixel grid as a whole.
     private static func row(_ images: [CGImage], side: Int) -> CGImage? {
         guard !images.isEmpty else { return nil }
         let width = images.count * side + (images.count - 1) * stripGap
-        guard let context = CGContext(data: nil, width: width, height: side, bitsPerComponent: 8, bytesPerRow: width * 4,
-                                      space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
-        context.interpolationQuality = .none
+        guard let context = IconRenderer.bitmap(width: width, height: side) else { return nil }
         for (index, image) in images.enumerated() {
             context.draw(image, in: CGRect(x: index * (side + stripGap), y: 0, width: side, height: side))
         }
